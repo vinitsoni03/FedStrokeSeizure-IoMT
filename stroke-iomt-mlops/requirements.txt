@@ -8,3 +8,4 @@ mne
 fastapi
 uvicorn
 streamlit
+xgboost
