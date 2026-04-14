@@ -9,3 +9,4 @@ flask
 requests
 fastapi
 uvicorn
+xgboost
