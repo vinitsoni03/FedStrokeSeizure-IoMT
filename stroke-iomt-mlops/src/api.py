@@ -21,79 +21,45 @@ def health():
     return {"status": "API running"}
 
 
-# Input schema
-class EEGSignal(BaseModel):
-    data: list[float]
-    channels: int = 23
-    timesteps: int = 256
+# Input schema for Stroke Model (10 features)
+class PatientData(BaseModel):
+    gender: float
+    age: float
+    hypertension: float
+    heart_disease: float
+    ever_married: float
+    work_type: float
+    Residence_type: float
+    avg_glucose_level: float
+    bmi: float
+    smoking_status: float
 
 
-# Preprocessing function
-def preprocess_payload(payload: EEGSignal):
-    raw_data = np.array(payload.data)
-
-    expected_size = payload.channels * payload.timesteps
-    if raw_data.size != expected_size:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Expected {expected_size} values, got {raw_data.size}"
-        )
-
-    # Reshape to (samples, channels, timesteps)
-    signals = raw_data.reshape(1, payload.channels, payload.timesteps)
-
-    # Normalize (Z-score)
-    mean = np.mean(signals, axis=2, keepdims=True)
-    std = np.std(signals, axis=2, keepdims=True)
-    std[std == 0] = 1e-8
-
-    signals_norm = (signals - mean) / std
-    return signals_norm
-
-
-# Feature extraction (IMPORTANT for your model)
-def extract_features(signals_norm):
-    mean_feat = np.mean(signals_norm, axis=2)
-    var_feat = np.var(signals_norm, axis=2)
-    min_feat = np.min(signals_norm, axis=2)
-    max_feat = np.max(signals_norm, axis=2)
-
-    return np.concatenate([mean_feat, var_feat, min_feat, max_feat], axis=1)
-
-
-# Random Forest endpoint
-@app.post("/predict_rf")
-def predict_rf(payload: EEGSignal):
+# Stroke Prediction endpoint
+@app.post("/predict_stroke")
+def predict_stroke(payload: PatientData):
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
-    signals_norm = preprocess_payload(payload)
-    features = extract_features(signals_norm)
+    # Extract 10 features in the exact order the model expects
+    features = np.array([[
+        payload.gender,
+        payload.age,
+        payload.hypertension,
+        payload.heart_disease,
+        payload.ever_married,
+        payload.work_type,
+        payload.Residence_type,
+        payload.avg_glucose_level,
+        payload.bmi,
+        payload.smoking_status
+    ]])
 
     prediction = model.predict(features)[0]
     probability = model.predict_proba(features)[0][1]
 
     return {
-        "model": "Random Forest",
-        "prediction": int(prediction),
-        "probability": float(probability)
-    }
-
-
-# CNN endpoint (fallback using same model)
-@app.post("/predict_cnn")
-def predict_cnn(payload: EEGSignal):
-    if model is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-
-    signals_norm = preprocess_payload(payload)
-    features = extract_features(signals_norm)
-
-    prediction = model.predict(features)[0]
-    probability = model.predict_proba(features)[0][1]
-
-    return {
-        "model": "CNN (fallback using RF)",
+        "model": "XGBoost Stroke Model",
         "prediction": int(prediction),
         "probability": float(probability)
     }
