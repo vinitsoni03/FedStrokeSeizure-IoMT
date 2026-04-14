@@ -15,7 +15,6 @@ import json
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 def load_processed_data():
     """Load processed data from CSV files."""
     X_train = pd.read_csv("data/processed/X_train.csv")

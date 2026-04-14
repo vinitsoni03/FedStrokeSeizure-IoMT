@@ -1,47 +1,101 @@
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from imblearn.over_sampling import SMOTE
+import numpy as np
+import os
 
-# Load dataset
-df = pd.read_csv("data/raw/stroke_data.csv")
+def load_data(mode="train"):
+    """
+    Loads the EEG data from NPZ files.
+    
+    Args:
+        mode (str): 'train' or 'val' to load respective files.
+        
+    Returns:
+        signals (np.ndarray): EEG signals of shape (Samples, Channels, TimeSteps)
+        labels (np.ndarray): Binary labels indicating seizure vs no seizure
+    """
+    # Use robust absolute path resolution regardless of from where this is executed
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, '..'))
+    base_path = os.path.join(project_root, 'data', 'raw')
+    
+    if mode == "train":
+        path = os.path.join(base_path, "eeg-seizure_train.npz")
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Dataset not found at {path}. Please check path.")
+        data = np.load(path)
+        return data['train_signals'], data['train_labels']
+    elif mode == "val":
+        path = os.path.join(base_path, "eeg-seizure_val.npz")
+        data = np.load(path)
+        return data['val_signals'], data['val_labels']
+    else:
+        raise ValueError("Mode must be 'train' or 'val'")
 
-# Drop id column
-df = df.drop(columns=["id"])
+def normalize_signals(signals):
+    """
+    Normalizes the signals using Z-score normalization per sample and channel.
+    Provides basic noise resistance and standardized amplitude.
+    
+    Args:
+        signals (np.ndarray): Shape (Samples, Channels, TimeSteps)
+        
+    Returns:
+        np.ndarray: Normalized signals
+    """
+    # Normalize along the time axis (axis 2)
+    mean = np.mean(signals, axis=2, keepdims=True)
+    std = np.std(signals, axis=2, keepdims=True)
+    
+    # Add small epsilon to prevent division by zero
+    std[std == 0] = 1e-8
+    
+    normalized = (signals - mean) / std
+    return normalized
 
-# Fill missing BMI
-df["bmi"] = df["bmi"].fillna(df["bmi"].mean())
+def extract_features_for_rf(signals):
+    """
+    Extracts tabular features from 3D signals for the Random Forest model.
+    Extracts mean, variance, min, max, and sum of absolute differences.
+    
+    Args:
+        signals (np.ndarray): Shape (Samples, Channels, TimeSteps)
+        
+    Returns:
+        np.ndarray: 2D feature matrix of shape (Samples, Channels * Num_Features)
+    """
+    print("Extracting statistical features for Random Forest...")
+    # Calculate statistical features across time dimension (axis=2)
+    mean_feat = np.mean(signals, axis=2)
+    var_feat = np.var(signals, axis=2)
+    min_feat = np.min(signals, axis=2)
+    max_feat = np.max(signals, axis=2)
+    
+    # Concatenate features: Shape becomes (Samples, Channels * 4)
+    features = np.concatenate([mean_feat, var_feat, min_feat, max_feat], axis=1)
+    print(f"Feature extraction complete. Shape: {features.shape}")
+    return features
 
-# Fill any other missing values
-df = df.fillna(df.mean(numeric_only=True))
+def prepare_data_for_cnn(signals):
+    """
+    Reshapes the signal data for Keras Conv1D CNN.
+    Keras expects shape: (Batch, TimeSteps, Channels)
+    
+    Args:
+        signals (np.ndarray): Shape (Samples, Channels, TimeSteps)
+        
+    Returns:
+        np.ndarray: Shape (Samples, TimeSteps, Channels)
+    """
+    # Transposing signals from (Samples, Channels, TimeSteps) to (Samples, TimeSteps, Channels)
+    return np.transpose(signals, (0, 2, 1))
 
-# Encode categorical columns
-categorical = ["gender","ever_married","work_type","Residence_type","smoking_status"]
-
-le = LabelEncoder()
-
-for col in categorical:
-    if col in df.columns:
-        df[col] = le.fit_transform(df[col].astype(str))
-
-# Split features and target
-X = df.drop("stroke", axis=1)
-y = df["stroke"]
-
-# Train test split
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
-)
-
-# Handle class imbalance
-smote = SMOTE()
-
-X_train, y_train = smote.fit_resample(X_train, y_train)
-
-# Save processed data
-X_train.to_csv("data/processed/X_train.csv", index=False)
-X_test.to_csv("data/processed/X_test.csv", index=False)
-y_train.to_csv("data/processed/y_train.csv", index=False)
-y_test.to_csv("data/processed/y_test.csv", index=False)
-
-print("Data preprocessing completed")
+if __name__ == "__main__":
+    # Small test
+    signals, labels = load_data("train")
+    print(f"Loaded Train Data: Signals {signals.shape}, Labels {labels.shape}")
+    
+    norm_signals = normalize_signals(signals)
+    rf_features = extract_features_for_rf(norm_signals)
+    cnn_input = prepare_data_for_cnn(norm_signals)
+    
+    print(f"Random Forest Input Shape: {rf_features.shape}")
+    print(f"CNN Input Shape: {cnn_input.shape}")

@@ -1,0 +1,36 @@
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Private Keys
+*.pem
+FEDkey.pem
+
+# Data
+data/
+*.npz
+*.csv
+
+# Models
+models/
+*.h5
+*.pkl
+*.pt
+
+# Outputs
+outputs/
+*.docx
+*.pptx
+
+# macOS
+.DS_Store

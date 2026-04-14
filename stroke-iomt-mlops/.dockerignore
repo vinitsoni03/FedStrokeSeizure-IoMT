@@ -1,0 +1,39 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Virtual environment files
+Pipfile.lock
+
+# Data and large files
+data/raw/
+outputs/plots/
+outputs/reports/
+outputs/presentation/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+notebooks/
+
+# IDEs and Tooling
+.vscode/
+.idea/
+.git/
+.gitignore
+
+# Temp files
+temp_check*.py
+*.log
