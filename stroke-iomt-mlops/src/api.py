@@ -2,31 +2,13 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import numpy as np
 import joblib
-from tensorflow.keras.models import load_model
-import os
 
 app = FastAPI(title="Seizure Prediction API")
 
-cnn_model = joblib.load("models/stroke_model.pkl")
-
-# Load models
-@app.on_event("startup")
-def load_models():
-    global rf_model, cnn_model
-
-    rf_path = "models/random_forest.pkl"
-    cnn_path = "models/cnn_model.h5"
-
-    if os.path.exists(rf_path):
-        rf_model = joblib.load(rf_path)
-        print("✅ Random Forest Loaded")
-
-    if os.path.exists(cnn_path):
-        cnn_model = load_model(cnn_path)
-        print("✅ CNN Model Loaded")
+# Load model (single model used for both endpoints)
+model = joblib.load("models/stroke_model.pkl")
 
 
-# Health check endpoint
 @app.get("/health")
 def health():
     return {"status": "API running"}
@@ -56,27 +38,25 @@ def preprocess_payload(payload: EEGSignal):
     std[std == 0] = 1e-8
 
     signals_norm = (signals - mean) / std
-
     return signals_norm
 
 
-@app.post("/predict_rf")
-def predict_rf(payload: EEGSignal):
-    if rf_model is None:
-        raise HTTPException(status_code=503, detail="RF model not loaded")
-
-    signals_norm = preprocess_payload(payload)
-
-    # Feature extraction
+def extract_features(signals_norm):
     mean_feat = np.mean(signals_norm, axis=2)
     var_feat = np.var(signals_norm, axis=2)
     min_feat = np.min(signals_norm, axis=2)
     max_feat = np.max(signals_norm, axis=2)
 
-    features = np.concatenate([mean_feat, var_feat, min_feat, max_feat], axis=1)
+    return np.concatenate([mean_feat, var_feat, min_feat, max_feat], axis=1)
 
-    prediction = rf_model.predict(features)[0]
-    probability = rf_model.predict_proba(features)[0, 1]
+
+@app.post("/predict_rf")
+def predict_rf(payload: EEGSignal):
+    signals_norm = preprocess_payload(payload)
+    features = extract_features(signals_norm)
+
+    prediction = model.predict(features)[0]
+    probability = model.predict_proba(features)[0][1]
 
     return {
         "model": "Random Forest",
@@ -87,19 +67,14 @@ def predict_rf(payload: EEGSignal):
 
 @app.post("/predict_cnn")
 def predict_cnn(payload: EEGSignal):
-    if cnn_model is None:
-        raise HTTPException(status_code=503, detail="CNN model not loaded")
-
     signals_norm = preprocess_payload(payload)
+    features = extract_features(signals_norm)
 
-    # CNN expects (samples, timesteps, channels)
-    cnn_input = np.transpose(signals_norm, (0, 2, 1))
-
-    probability = float(cnn_model.predict(cnn_input, verbose=0).ravel()[0])
-    prediction = int(probability > 0.5)
+    prediction = model.predict(features)[0]
+    probability = model.predict_proba(features)[0][1]
 
     return {
-        "model": "CNN",
-        "prediction": prediction,
-        "probability": probability
+        "model": "CNN (fallback using RF)",
+        "prediction": int(prediction),
+        "probability": float(probability)
     }
