@@ -7,8 +7,7 @@ import os
 
 app = FastAPI(title="Seizure Prediction API")
 
-rf_model = None
-cnn_model = None
+cnn_model = joblib.load("models/stroke_model.pkl")
 
 # Load models
 @app.on_event("startup")
