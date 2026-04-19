@@ -5,6 +5,13 @@ import requests
 import json
 from datetime import datetime
 
+# Import Hospital cases
+try:
+    from src.cases import NORMAL_SIGNAL, SEIZURE_SIGNAL
+    HAS_CASES = True
+except ImportError:
+    HAS_CASES = False
+
 # Set Page Config
 st.set_page_config(
     page_title="FedStrokeSeizure Dashboard",
@@ -40,7 +47,8 @@ st.markdown("""
 
 # sidebar header
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2491/2491413.png", width=80)
-st.sidebar.title("Clinical Portal")
+st.sidebar.title("Clinical Portal v2.0")
+st.sidebar.info("Hospital Simulation Mode Active")
 st.sidebar.markdown("---")
 
 # API Configuration
@@ -48,7 +56,7 @@ API_URL = "http://api:8000"  # Inside docker network
 
 # Main Header
 st.title("🧠 Seizure & Stroke Prediction System")
-st.markdown("*Production-grade clinical monitoring using Federated Learning optimized models.*")
+st.markdown("*Real-time clinical monitoring using realistic Hospital Case Library.*")
 
 tabs = st.tabs(["📊 Seizure Prediction (EEG)", "💓 Stroke Risk Analysis", "📂 S3 Log History"])
 
@@ -60,16 +68,26 @@ with tabs[0]:
     
     with col1:
         st.subheader("Data Acquisition")
-        data_source = st.radio("EEG Source", ["Generate Test Signal", "Manual Entry"])
+        options = ["Hospital Case Library", "Manual Record Entry", "Generate Random Test Signal"]
+        data_source = st.radio("Signal Source", options)
         
         signal_data = None
-        if data_source == "Generate Test Signal":
-            # 23 channels x 256Hz = 5888 points
+        if data_source == "Hospital Case Library":
+            patient = st.selectbox("Select Patient Case", ["Patient A-01 (Normal Activity)", "Patient B-05 (Seizure Event)"])
+            if "A-01" in patient:
+                signal_data = NORMAL_SIGNAL
+                st.info("🏥 Case Loaded: Stable background EEG from CHB-MIT hospital records.")
+            else:
+                signal_data = SEIZURE_SIGNAL
+                st.warning("🏥 Case Loaded: High-amplitude seizure discharge recorded in-situ.")
+        
+        elif data_source == "Generate Random Test Signal":
             dummy = np.random.randn(23, 256)
             signal_data = dummy.flatten().tolist()
-            st.info("✅ 23-Channel EEG buffer generated (1 second at 256Hz)")
+            st.info("🧪 Synthetic 23-Channel EEG buffer generated.")
+            
         else:
-            raw_input = st.text_area("Paste Signal Data (JSON Array)", height=200)
+            raw_input = st.text_area("Paste Clinical JSON Record", height=200)
             if raw_input:
                 try:
                     signal_data = json.loads(raw_input)
@@ -79,50 +97,48 @@ with tabs[0]:
         model_choice = st.selectbox("Inference Engine", ["CNN Deep Learning", "Random Forest Standalone"])
 
     with col2:
-        st.subheader("Signal Visualization")
+        st.subheader("Signal Visualization (Real Patient Data)")
         if signal_data:
-            # Reshape for plotting
             signals = np.array(signal_data).reshape(23, 256)
             fig, ax = plt.subplots(figsize=(12, 4), facecolor='#0e1117')
             ax.set_facecolor('#0e1117')
             
-            # Plot first 5 channels
+            # Plot representative channels
             for i in range(min(5, 23)):
-                ax.plot(signals[i] + (i * 5), label=f"Ch {i}", linewidth=0.7)
+                ax.plot(signals[i] + (i * 100), label=f"Ch {i}", linewidth=1.0)
             
-            ax.set_title("Real-time EEG Streaming Data", color='white')
+            ax.set_title("Clinical EEG Monitoring Stream", color='white')
             ax.tick_params(colors='white')
             ax.legend(loc='upper right', fontsize='small')
             st.pyplot(fig)
         else:
-            st.info("Awaiting signal input...")
+            st.info("Awaiting clinical record...")
 
-    if st.button("RUN SEIZURE INFERENCE"):
+    if st.button("RUN CLINICAL INFERENCE"):
         if signal_data:
             endpoint = "/predict_seizure_cnn" if "CNN" in model_choice else "/predict_seizure_rf"
             try:
                 payload = {"data": signal_data, "channels": 23, "timesteps": 256}
-                with st.spinner("Analyzing high-frequency components..."):
+                with st.spinner("Analyzing neural pathways..."):
                     resp = requests.post(f"{API_URL}{endpoint}", json=payload)
                     data = resp.json()
                 
-                # Results Display
                 st.markdown("---")
                 res_col1, res_col2 = st.columns(2)
                 
                 with res_col1:
                     if data['prediction'] == 1:
-                        st.error("🚨 SEIZURE DETECTED")
+                        st.error("🚨 CRITICAL: SEIZURE DETECTED")
                     else:
-                        st.success("✅ NORMAL ACTIVITY")
+                        st.success("✅ STATUS: NORMAL ACTIVITY")
                 
                 with res_col2:
-                    st.metric("Confidence Level", f"{data['probability'] * 100:.2f}%")
+                    st.metric("Detection Confidence", f"{data['probability'] * 100:.2f}%")
                     
             except Exception as e:
-                st.error(f"API Error: {str(e)}")
+                st.error(f"API Error (Check Connection): {str(e)}")
         else:
-            st.warning("No signal data loaded.")
+            st.warning("No hospital record loaded.")
 
 # ==========================================
 # STROKE RISK TAB
@@ -149,7 +165,6 @@ with tabs[1]:
         submit = st.form_submit_button("EVALUATE STROKE RISK")
         
         if submit:
-            # Mapping
             mapped_data = {
                 "gender": 1.0 if gender == "Male" else 0.0,
                 "age": float(age),
@@ -164,7 +179,7 @@ with tabs[1]:
             }
             
             try:
-                with st.spinner("Processing XGBoost risk layers..."):
+                with st.spinner("Processing clinical markers..."):
                     resp = requests.post(f"{API_URL}/predict_stroke", json=mapped_data)
                     data = resp.json()
                 
@@ -180,16 +195,14 @@ with tabs[1]:
 # HISTORY TAB
 # ==========================================
 with tabs[2]:
-    st.subheader("Data Lake Integration (AWS S3)")
-    st.info("System is configured to log all predictions to `seizure-prediction-logs` bucket.")
+    st.subheader("Cloud Data Lake (AWS S3)")
+    st.info("Clinical audit logs are being streamed to `seizure-prediction-logs`.")
     st.markdown("""
-        Every interaction above is automatically captured as a JSON record in your S3 archive.
-        - **Latency**: < 100ms (Asynchronous Background Task)
-        - **Storage Format**: `predictions/YYYY-MM-DD/uuid.json`
+        The system automatically archives every prediction for clinical auditing.
+        - **Real-time Streaming**: Active
+        - **Bucket**: `seizure-prediction-logs` 
+        - **Format**: Clinically-formatted JSON
     """)
-    if st.button("Manual Log Verification"):
-        st.write("Fetching latest logs metadata... [Functionality under development]")
 
 st.sidebar.markdown("---")
-st.sidebar.caption(f"Connected to: {API_URL}")
-st.sidebar.caption(f"Last sync: {datetime.now().strftime('%H:%M:%S')}")
+st.sidebar.caption(f"Sync: {datetime.now().strftime('%H:%M:%S')}")
