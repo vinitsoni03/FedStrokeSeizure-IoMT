@@ -9,3 +9,6 @@ fastapi
 uvicorn
 streamlit
 xgboost
+imbalanced-learn
+PyWavelets
+joblib
