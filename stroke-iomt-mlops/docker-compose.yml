@@ -3,14 +3,14 @@ version: '3.8'
 services:
   api:
     build:
-      context: ./stroke-iomt-mlops
+      context: .
       dockerfile: Dockerfile
     container_name: seizure-stroke-api
     ports:
       - "8000:8000"
     volumes:
-      - ./stroke-iomt-mlops/models:/app/models
-      - ./stroke-iomt-mlops/outputs:/app/outputs
+      - ./models:/app/models
+      - ./outputs:/app/outputs
     restart: always
     environment:
       - PYTHONUNBUFFERED=1
