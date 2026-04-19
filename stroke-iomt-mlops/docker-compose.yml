@@ -15,3 +15,14 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - S3_LOG_BUCKET=seizure-prediction-logs
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    container_name: seizure-stroke-dashboard
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+    restart: always
