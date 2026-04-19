@@ -14,3 +14,4 @@ services:
     restart: always
     environment:
       - PYTHONUNBUFFERED=1
+      - S3_LOG_BUCKET=seizure-prediction-logs

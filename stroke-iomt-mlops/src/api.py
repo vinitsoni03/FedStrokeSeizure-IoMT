@@ -1,4 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+import boto3
+import json
+from datetime import datetime
+import uuid
 from pydantic import BaseModel
 import numpy as np
 import joblib
@@ -11,6 +15,39 @@ app = FastAPI(title="FedStrokeSeizure-IoMT API", description="API serving multip
 stroke_model = None
 seizure_rf_model = None
 seizure_cnn_model = None
+
+# S3 Configuration
+S3_BUCKET = os.getenv("S3_LOG_BUCKET", "seizure-prediction-logs")
+s3_client = boto3.client("s3")
+
+class S3Logger:
+    @staticmethod
+    def log_prediction(model_name: str, input_data: dict, output_data: dict):
+        """Asynchronously log prediction data to S3."""
+        if not S3_BUCKET:
+            return
+
+        timestamp = datetime.now().strftime("%Y-%m-%d/%H-%M-%S")
+        log_id = str(uuid.uuid4())[:8]
+        file_key = f"predictions/{timestamp}_{model_name}_{log_id}.json"
+        
+        log_payload = {
+            "timestamp": datetime.now().isoformat(),
+            "model": model_name,
+            "input": input_data,
+            "output": output_data
+        }
+
+        try:
+            s3_client.put_object(
+                Bucket=S3_BUCKET,
+                Key=file_key,
+                Body=json.dumps(log_payload),
+                ContentType="application/json"
+            )
+            print(f"✅ Logged to S3: {file_key}")
+        except Exception as e:
+            print(f"❌ S3 Log Error: {str(e)}")
 
 # Load models on startup
 @app.on_event("startup")
@@ -56,7 +93,7 @@ class StrokePatientData(BaseModel):
 
 
 @app.post("/predict_stroke")
-def predict_stroke(payload: StrokePatientData):
+def predict_stroke(payload: StrokePatientData, background_tasks: BackgroundTasks):
     if stroke_model is None:
         raise HTTPException(status_code=503, detail="Stroke model not loaded")
 
@@ -69,11 +106,16 @@ def predict_stroke(payload: StrokePatientData):
     prediction = stroke_model.predict(features)[0]
     probability = stroke_model.predict_proba(features)[0][1]
 
-    return {
+    result = {
         "model": "XGBoost Stroke Risk Model",
         "prediction": int(prediction),
         "probability": float(probability)
     }
+
+    # Log to S3 in background
+    background_tasks.add_task(S3Logger.log_prediction, "stroke_xgboost", payload.dict(), result)
+
+    return result
 
 
 # ==========================================
@@ -99,7 +141,7 @@ def preprocess_eeg(payload: EEGSignal):
 
 
 @app.post("/predict_seizure_rf")
-def predict_seizure_rf(payload: EEGSignal):
+def predict_seizure_rf(payload: EEGSignal, background_tasks: BackgroundTasks):
     """Predict Seizures utilizing the standalone Random Forest Model (Comparitive Model 1)"""
     if seizure_rf_model is None:
         raise HTTPException(status_code=503, detail="Seizure RF model not loaded")
@@ -116,15 +158,20 @@ def predict_seizure_rf(payload: EEGSignal):
     prediction = seizure_rf_model.predict(features)[0]
     probability = seizure_rf_model.predict_proba(features)[0][1]
 
-    return {
+    result = {
         "model": "Random Forest Seizure Model",
         "prediction": int(prediction),
         "probability": float(probability)
     }
 
+    # Log to S3 in background (EEG data can be large, consider summary if needed)
+    background_tasks.add_task(S3Logger.log_prediction, "seizure_rf", payload.dict(), result)
+
+    return result
+
 
 @app.post("/predict_seizure_cnn")
-def predict_seizure_cnn(payload: EEGSignal):
+def predict_seizure_cnn(payload: EEGSignal, background_tasks: BackgroundTasks):
     """Predict Seizures utilizing the 1D-CNN Deep Learning Model (Comparitive Model 2)"""
     if seizure_cnn_model is None:
         raise HTTPException(status_code=503, detail="Seizure CNN model not loaded")
@@ -135,8 +182,13 @@ def predict_seizure_cnn(payload: EEGSignal):
     probability = float(seizure_cnn_model.predict(cnn_input, verbose=0).ravel()[0])
     prediction = int(probability > 0.5)
 
-    return {
+    result = {
         "model": "CNN Seizure Deep Learning Model",
         "prediction": prediction,
         "probability": probability
     }
+
+    # Log to S3 in background
+    background_tasks.add_task(S3Logger.log_prediction, "seizure_cnn", payload.dict(), result)
+
+    return result

@@ -12,3 +12,4 @@ xgboost
 imbalanced-learn
 PyWavelets
 joblib
+boto3
