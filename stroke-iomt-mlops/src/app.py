@@ -7,9 +7,14 @@ from datetime import datetime
 
 # Import Hospital cases
 try:
-    from src.cases import NORMAL_SIGNAL, SEIZURE_SIGNAL
+    try:
+        from src.cases import NORMAL_SIGNAL, SEIZURE_SIGNAL
+    except ImportError:
+        from cases import NORMAL_SIGNAL, SEIZURE_SIGNAL
     HAS_CASES = True
 except ImportError:
+    NORMAL_SIGNAL = []
+    SEIZURE_SIGNAL = []
     HAS_CASES = False
 
 # Set Page Config

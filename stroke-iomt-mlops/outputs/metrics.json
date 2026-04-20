@@ -1,0 +1,23 @@
+{
+    "Random Forest": {
+        "Accuracy": 0.9516,
+        "Precision": 0.8797,
+        "Recall": 0.903,
+        "F1-score": 0.8912,
+        "ROC-AUC": 0.988
+    },
+    "XGBoost": {
+        "Accuracy": 0.9455,
+        "Precision": 0.8388,
+        "Recall": 0.9306,
+        "F1-score": 0.8824,
+        "ROC-AUC": 0.9878
+    },
+    "CNN": {
+        "Accuracy": 0.9478,
+        "Precision": 0.8793,
+        "Recall": 0.8838,
+        "F1-score": 0.8816,
+        "ROC-AUC": 0.9809
+    }
+}

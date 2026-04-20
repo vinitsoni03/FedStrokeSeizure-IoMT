@@ -28,7 +28,7 @@ models/
 *.pt
 
 # Outputs
-outputs/
+# outputs/
 *.docx
 *.pptx
 
